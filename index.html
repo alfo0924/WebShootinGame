@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>氣球射擊遊戲</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #f0f0f0;
+        }
+        #gameContainer {
+            width: 800px;
+            height: 600px;
+            margin: 0 auto;
+            position: relative;
+            background-color: #87CEEB;
+            overflow: hidden;
+        }
+        #weaponSelection {
+            padding: 20px;
+        }
+        .weapon {
+            display: inline-block;
+            margin: 10px;
+            padding: 10px;
+            background-color: #4CAF50;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .weapon:hover {
+            background-color: #45a049;
+        }
+        #countdown, #timer, #score, #results {
+            font-size: 24px;
+            font-weight: bold;
+            margin: 10px;
+        }
+        .balloon {
+            position: absolute;
+            width: 50px;
+            height: 60px;
+            background-image: radial-gradient(circle at 50% 50%, red, darkred);
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        .balloon:before {
+            content: "";
+            position: absolute;
+            width: 6px;
+            height: 15px;
+            background: #000;
+            bottom: -15px;
+            left: 22px;
+        }
+        #weapon-image {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 100px;
+            height: 100px;
+            z-index: 100;
+        }
+        #results {
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <h1>氣球射擊遊戲</h1>
+    
+    <div id="gameContainer">
+        <div id="weaponSelection">
+            <h2>選擇你的武器</h2>
+            <div class="weapon" onclick="selectWeapon('pistol')">手槍</div>
+            <div class="weapon" onclick="selectWeapon('rifle')">步槍</div>
+            <div class="weapon" onclick="selectWeapon('shotgun')">散彈槍</div>
+        </div>
+        
+        <div id="countdown" style="display: none;"></div>
+        <div id="timer" style="display: none;"></div>
+        <div id="score" style="display: none;">分數: 0</div>
+        
+        <div id="results">
+            <h2>遊戲結束!</h2>
+            <p id="finalScore"></p>
+            <p id="accuracy"></p>
+            <button onclick="restartGame()">再玩一次</button>
+        </div>
+        
+        <img id="weapon-image" style="display: none;" src="" alt="武器">
+    </div>
+    
+    <script>
+        let score = 0;
+        let shots = 0;
+        let hits = 0;
+        let gameActive = false;
+        let balloons = [];
+        let selectedWeapon = '';
+        let weaponImages = {
+            'pistol': 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cGF0aCBkPSJNNDgwIDMyMGgtMTI4VjE2MGMwLTE3LjY3LTE0LjMzLTMyLTMyLTMySDk2Yy0xNy42NyAwLTMyIDE0LjMzLTMyIDMydjMyMEg0OGMtMTcuNjcgMC0zMiAxNC4zMy0zMiAzMnYzMmMwIDE3LjY3IDE0LjMzIDMyIDMyIDMyaDQzMmMxNy42NyAwIDMyLTE0LjMzIDMyLTMydi0xOTJjMC0xNy42Ny0xNC4zMy0zMi0zMi0zMnpNMTI4IDQxNmMtMTcuNjcgMC0zMi0xNC4zMy0zMi0zMnMxNC4zMy0zMiAzMi0zMnMzMiAxNC4zMyAzMiAzMi0xNC4zMyAzMi0zMiAzMnptMC0xNjBjLTE3LjY3IDAtMzItMTQuMzMtMzItMzJzMTQuMzMtMzIgMzItMzJzMzIgMTQuMzMgMzIgMzItMTQuMzMgMzItMzIgMzJ6Ii8+PC9zdmc+',
+            'rifle': 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cGF0aCBkPSJNNTEyIDMyMGMwLTk0LjQ0LTc3LjU2LTE3MS4zLTE3Mi4xLTE3MS4zLTk0LjUzIDAtMTcxLjkgNzYuODYtMTcxLjkgMTcxLjMgMCA5NC41MSA3Ny4zNyAxNzEuNyAxNzEuOSAxNzEuNyA5NC41MyAwIDE3Mi4xLTc3LjE5IDE3Mi4xLTE3MS43ek0xOTIgMzIwYzAtODEuNjEgNjYuMzktMTQ4IDE0OC0xNDhzMTQ4IDY2LjM5IDE0OCAxNDgtNjYuMzkgMTQ4LTE0OCAxNDhTMTkyIDQwMS42IDE5MiAzMjB6TTk2IDExMmMwLTExLjEyIDktMjAuMTIgMjAuMTItMjAuMTJzMjAuMTIgOSAyMC4xMiAyMC4xMi05IDIwLjEyLTIwLjEyIDIwLjEyUzk2IDEyMy4xIDk2IDExMnpNMjQgMTEyYzAtMTEuMTIgOS0yMC4xMiAyMC4xMi0yMC4xMlM2NC4yNSAxMDAuOSA2NC4yNSAxMTJzLTkgMjAuMTItMjAuMTIgMjAuMTJTMjQgMTIzLjEgMjQgMTEyek0zNy4yNSA5NmMxMS4xMiAwIDIwLjEyLTkgMjAuMTItMjAuMTJzLTktMjAuMTItMjAuMTItMjAuMTItMjAuMTIgOS0yMC4xMiAyMC4xMlMyNi4xMyA5NiAzNy4yNSA5NnptNTkgMGMxMS4xMiAwIDIwLjEyLTkgMjAuMTItMjAuMTJzLTktMjAuMTItMjAuMTItMjAuMTItMjAuMTIgOS0yMC4xMiAyMC4xMlM4NS4xMyA5NiA5Ni4yNSA5NnoiLz48L3N2Zz4=',
+            'shotgun': 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cGF0aCBkPSJNNTEyIDExMnYtODBjMC0xNy42Ny0xNC4zMy0zMi0zMi0zMkg0OEMzMC4zMyAwIDE2IDE0LjMzIDE2IDMydjgwYzAgMTcuNjcgMTQuMzMgMzIgMzIgMzJoNDMyYzE3LjY3IDAgMzItMTQuMzMgMzItMzJ6TTQ4IDMyaDQzMnY4MEg0OFYzMnptLTMyIDEyOHY4MGMwIDE3LjY3IDE0LjMzIDMyIDMyIDMyaDQzMmMxNy42NyAwIDMyLTE0LjMzIDMyLTMydi04MGMwLTE3LjY3LTE0LjMzLTMyLTMyLTMySDQ4Yy0xNy42NyAwLTMyIDE0LjMzLTMyIDMyem00ODAgODB2LTgwSDQ4djgwaDQ0OHptLTQ4MCA0OHY4MGMwIDE3LjY3IDE0LjMzIDMyIDMyIDMyaDQzMmMxNy42NyAwIDMyLTE0LjMzIDMyLTMydi04MGMwLTE3LjY3LTE0LjMzLTMyLTMyLTMySDQ4Yy0xNy42NyAwLTMyIDE0LjMzLTMyIDMyem00ODAgODB2LTgwSDQ4djgwaDQ0OHoiLz48L3N2Zz4='
+        };
+        
+        function selectWeapon(weapon) {
+            selectedWeapon = weapon;
+            document.getElementById('weaponSelection').style.display = 'none';
+            document.getElementById('countdown').style.display = 'block';
+            document.getElementById('weapon-image').style.display = 'block';
+            document.getElementById('weapon-image').src = weaponImages[weapon];
+            
+            // 開始倒數
+            let count = 5;
+            document.getElementById('countdown').innerText = '準備開始: ' + count;
+            
+            let countdownInterval = setInterval(() => {
+                count--;
+                document.getElementById('countdown').innerText = '準備開始: ' + count;
+                
+                if (count <= 0) {
+                    clearInterval(countdownInterval);
+                    startGame();
+                }
+            }, 1000);
+        }
+        
+        function startGame() {
+            gameActive = true;
+            document.getElementById('countdown').style.display = 'none';
+            document.getElementById('timer').style.display = 'block';
+            document.getElementById('score').style.display = 'block';
+            
+            // 設置10秒計時器
+            let timeLeft = 10;
+            document.getElementById('timer').innerText = '剩餘時間: ' + timeLeft + '秒';
+            
+            // 生成氣球
+            createBalloons();
+            
+            // 設置點擊事件
+            document.getElementById('gameContainer').addEventListener('click', shootBalloon);
+            
+            let gameTimer = setInterval(() => {
+                timeLeft--;
+                document.getElementById('timer').innerText = '剩餘時間: ' + timeLeft + '秒';
+                
+                if (timeLeft <= 0) {
+                    clearInterval(gameTimer);
+                    endGame();
+                }
+            }, 1000);
+        }
+        
+        function createBalloons() {
+            // 每秒創建1-2個氣球
+            let balloonInterval = setInterval(() => {
+                if (!gameActive) {
+                    clearInterval(balloonInterval);
+                    return;
+                }
+                
+                createBalloon();
+                
+                // 50%的機率再創建一個氣球
+                if (Math.random() > 0.5) {
+                    setTimeout(createBalloon, 500);
+                }
+            }, 1000);
+        }
+        
+        function createBalloon() {
+            const container = document.getElementById('gameContainer');
+            const balloon = document.createElement('div');
+            balloon.className = 'balloon';
+            
+            // 隨機位置
+            const left = Math.random() * (container.offsetWidth - 50);
+            const top = Math.random() * (container.offsetHeight - 150) + 50;
+            
+            balloon.style.left = left + 'px';
+            balloon.style.top = top + 'px';
+            
+            // 隨機顏色
+            const colors = ['red', 'blue', 'green', 'yellow', 'purple'];
+            const color = colors[Math.floor(Math.random() * colors.length)];
+            balloon.style.backgroundImage = `radial-gradient(circle at 50% 50%, ${color}, dark${color})`;
+            
+            container.appendChild(balloon);
+            balloons.push(balloon);
+            
+            // 氣球2-4秒後消失
+            setTimeout(() => {
+                if (balloon.parentNode) {
+                    balloon.parentNode.removeChild(balloon);
+                    const index = balloons.indexOf(balloon);
+                    if (index > -1) {
+                        balloons.splice(index, 1);
+                    }
+                }
+            }, 2000 + Math.random() * 2000);
+        }
+        
+        function shootBalloon(event) {
+            if (!gameActive) return;
+            
+            shots++;
+            
+            // 創建射擊效果
+            const container = document.getElementById('gameContainer');
+            const shot = document.createElement('div');
+            shot.style.position = 'absolute';
+            shot.style.width = '10px';
+            shot.style.height = '10px';
+            shot.style.backgroundColor = 'yellow';
+            shot.style.borderRadius = '50%';
+            shot.style.left = event.clientX - container.getBoundingClientRect().left + 'px';
+            shot.style.top = event.clientY - container.getBoundingClientRect().top + 'px';
+            shot.style.zIndex = '50';
+            container.appendChild(shot);
+            
+            // 射擊效果消失
+            setTimeout(() => {
+                shot.parentNode.removeChild(shot);
+            }, 100);
+            
+            // 檢查是否擊中氣球
+            let hit = false;
+            for (let i = 0; i < balloons.length; i++) {
+                const balloon = balloons[i];
+                const rect = balloon.getBoundingClientRect();
+                const containerRect = container.getBoundingClientRect();
+                
+                if (
+                    event.clientX >= rect.left &&
+                    event.clientX <= rect.right &&
+                    event.clientY >= rect.top &&
+                    event.clientY <= rect.bottom
+                ) {
+                    // 擊中氣球
+                    hit = true;
+                    hits++;
+                    score += 10;
+                    document.getElementById('score').innerText = '分數: ' + score;
+                    
+                    // 移除氣球
+                    balloon.parentNode.removeChild(balloon);
+                    balloons.splice(i, 1);
+                    break;
+                }
+            }
+        }
+        
+        function endGame() {
+            gameActive = false;
+            
+            // 移除所有氣球
+            balloons.forEach(balloon => {
+                if (balloon.parentNode) {
+                    balloon.parentNode.removeChild(balloon);
+                }
+            });
+            balloons = [];
+            
+            // 移除點擊事件
+            document.getElementById('gameContainer').removeEventListener('click', shootBalloon);
+            
+            // 顯示結果
+            const accuracy = shots > 0 ? Math.round((hits / shots) * 100) : 0;
+            document.getElementById('finalScore').innerText = '最終分數: ' + score;
+            document.getElementById('accuracy').innerText = '命中率: ' + accuracy + '%';
+            document.getElementById('results').style.display = 'block';
+        }
+        
+        function restartGame() {
+            // 重置遊戲
+            score = 0;
+            shots = 0;
+            hits = 0;
+            document.getElementById('score').innerText = '分數: 0';
+            document.getElementById('results').style.display = 'none';
+            document.getElementById('timer').style.display = 'none';
+            document.getElementById('score').style.display = 'none';
+            document.getElementById('weapon-image').style.display = 'none';
+            document.getElementById('weaponSelection').style.display = 'block';
+        }
+    </script>
+</body>
+</html>
